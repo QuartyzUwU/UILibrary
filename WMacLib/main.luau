@@ -1082,6 +1082,13 @@ function WMacLib:Window(Settings)
 	local startPos
 
 	local function update(input)
+		-- safety net: the button was released somewhere we never saw it (outside the window, over a sinking gui)
+		if input.UserInputType == Enum.UserInputType.MouseMovement
+			and not UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
+			dragging_ = false
+			dragInput = nil
+			return
+		end
 		local delta = input.Position - dragStart
 		base.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
 	end
@@ -1092,6 +1099,12 @@ function WMacLib:Window(Settings)
 			dragInput = input
 			dragStart = input.Position
 			startPos = base.Position
+			input.Changed:Connect(function()
+				if input.UserInputState == Enum.UserInputState.End then
+					dragging_ = false
+					dragInput = nil
+				end
+			end)
 		end
 	end
 
@@ -1117,7 +1130,11 @@ function WMacLib:Window(Settings)
 		end)
 
 		UserInputService.InputEnded:Connect(function(input)
-			if input == dragInput then
+			-- dragInput is replaced by the mouse-move input while dragging, so it can never equal the released button:
+			-- stop on any mouse-button / touch release instead
+			if dragging_ and (input == dragInput
+				or input.UserInputType == Enum.UserInputType.MouseButton1
+				or input.UserInputType == Enum.UserInputType.Touch) then
 				dragging_ = false
 				dragInput = nil
 			end
@@ -1147,7 +1164,11 @@ function WMacLib:Window(Settings)
 		end)
 
 		UserInputService.InputEnded:Connect(function(input)
-			if input == dragInput then
+			-- dragInput is replaced by the mouse-move input while dragging, so it can never equal the released button:
+			-- stop on any mouse-button / touch release instead
+			if dragging_ and (input == dragInput
+				or input.UserInputType == Enum.UserInputType.MouseButton1
+				or input.UserInputType == Enum.UserInputType.Touch) then
 				dragging_ = false
 				dragInput = nil
 			end
@@ -1168,7 +1189,11 @@ function WMacLib:Window(Settings)
 		end)
 
 		UserInputService.InputEnded:Connect(function(input)
-			if input == dragInput then
+			-- dragInput is replaced by the mouse-move input while dragging, so it can never equal the released button:
+			-- stop on any mouse-button / touch release instead
+			if dragging_ and (input == dragInput
+				or input.UserInputType == Enum.UserInputType.MouseButton1
+				or input.UserInputType == Enum.UserInputType.Touch) then
 				dragging_ = false
 				dragInput = nil
 			end
@@ -6067,6 +6092,11 @@ function WMacLib:Window(Settings)
 		local lastW, lastH
 		RunService.RenderStepped:Connect(function()
 			if not resizing then return end
+			if not UserInputService.TouchEnabled and not UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
+				resizing = false   -- released outside the window: finish the resize
+				if Settings.OnResize and lastW then task.spawn(Settings.OnResize, lastW, lastH) end
+				return
+			end
 			local scale = baseUIScale.Scale
 			local delta = (UserInputService:GetMouseLocation() - startMouse) / scale
 			local w = math.clamp(math.floor(startSize.X + delta.X), minSize.X, maxSize.X)
